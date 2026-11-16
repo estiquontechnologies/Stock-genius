@@ -3,6 +3,7 @@
 // simulated and flagged with `simulated: true` / `sample: true`.
 
 import { buildSampleWorld } from './generator.js';
+import { buildSampleOptions } from './options.js';
 import { lastCompletedSession, istTimestamp, addDays } from '../../lib/dates.js';
 
 export class SampleProvider {
@@ -100,6 +101,22 @@ export class SampleProvider {
   async getSourceItem(id) {
     const w = this.world();
     return w.news.find((x) => x.id === id) || w.calendar.find((x) => x.id === id) || null;
+  }
+
+  options() {
+    const w = this.world();
+    if (this._optWorld !== w) { this._opt = buildSampleOptions(w); this._optWorld = w; }
+    return this._opt;
+  }
+
+  /** Underlyings with listed options (F&O segment). */
+  async getOptionUnderlyings() {
+    return Object.values(this.options()).map(({ rows, history, ...u }) => u);
+  }
+
+  /** Full end-of-day option chain for one underlying, plus ATM IV / PCR history. */
+  async getOptionChain(symbol) {
+    return this.options()[symbol] || null;
   }
 
   async sessions() {

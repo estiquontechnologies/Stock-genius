@@ -28,7 +28,7 @@ export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const inrFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const intFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 export const fmt = {
-  inr: (x, d = 2) => (x == null || !Number.isFinite(x) ? '—' : `₹${d === 0 ? intFmt.format(x) : inrFmt.format(x)}`),
+  inr: (x, d = 2) => (x == null || !Number.isFinite(x) ? '—' : `${x < 0 ? '−' : ''}₹${d === 0 ? intFmt.format(Math.abs(x)) : inrFmt.format(Math.abs(x))}`),
   num: (x, d = 1) => (x == null || !Number.isFinite(x) ? '—' : Number(x).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d })),
   pct: (x, d = 1) => (x == null || !Number.isFinite(x) ? '—' : `${x >= 0 ? '+' : '−'}${Math.abs(x * 100).toFixed(d)}%`),
   pctAbs: (x, d = 1) => (x == null || !Number.isFinite(x) ? '—' : `${(x * 100).toFixed(d)}%`),

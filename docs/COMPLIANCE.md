@@ -19,13 +19,20 @@
 - Point-in-time history and a server-side log of every displayed view (`recommendationLog` in the store) support record-keeping.
 - No trade execution, no brokerage credentials, no personalised suggestions.
 
-## 2. Advertising
+## 2. Options (F&O) content
+
+- SEBI has repeatedly flagged losses among individual F&O traders (its September 2024 study reported about 93% of individual traders made net losses over FY22–FY24) and has tightened F&O rules for retail participation. Brokers must show risk disclosures; content that looks like F&O “tips” draws particular regulatory attention.
+- Design choices already made: the options pages show **no Buy/Sell views, no trade ideas and no order placement**. A risk notice citing the SEBI study appears at the top of every options page. Example strategies in the payoff simulator are labelled as educational illustrations; the simulator ignores costs, taxes and margin and says so.
+- Questions for counsel: Does analytics such as max pain, PCR and OI “levels” amount to research under the RA Regulations? Do the example strategies need further framing? What disclosures should accompany derived Greeks and implied volatility?
+- Data: the NSE F&O bhavcopy has the same licensing considerations as other exchange data (section 4).
+
+## 3. Advertising
 
 - **Conflicts of interest:** advertisers could include brokers, trading apps, mutual funds or listed companies covered by the site. Recommended: block those categories in AdSense, disclose ad funding, and never accept direct sponsorship from covered companies.
 - **Separation:** ads only in labelled slots, never inside views, evidence, risks or news. This is implemented.
 - **Law and policies:** Consumer Protection Act 2019; CCPA guidelines on misleading advertisements and dark patterns (2022/2023); ASCI code; Google AdSense financial-services and personalisation policies.
 
-## 3. Market-data licensing
+## 4. Market-data licensing
 
 | Source | Notes |
 |---|---|
@@ -36,19 +43,19 @@
 
 **Action:** obtain licences (version 2 “paid feeds”) before public, ad-supported operation. The automated collector is polite (once daily, sequential, delayed requests) but that does not grant permission.
 
-## 4. Privacy and platform law
+## 5. Privacy and platform law
 
 - **Digital Personal Data Protection Act, 2023** and DPDP Rules: notice, consent (including advertising cookies), purpose limitation, retention, security safeguards, breach reporting, data-principal rights, grievance officer. The current build is single-user and stores watchlists, theses, journal and holdings in a server file. Multi-user operation needs accounts, a database, encryption at rest, retention and deletion flows.
 - **IT Act 2000 and IT (Intermediary Guidelines and Digital Media Ethics Code) Rules, 2021** if user-generated content is published.
 - Terms of use, privacy policy, cookie policy, grievance-officer contact details, and an error-correction process.
 
-## 5. Model governance
+## 6. Model governance
 
 - Document rules, weights and sector assumptions (in-app Methodology page; `server/analysis/`). Version the model (`MODEL_VERSION`).
 - Periodically review outcomes vs views. Record reviews and changes.
 - Monitor data quality; show stale-data states (implemented); add an incident process for bad data.
 
-## 6. Open engineering items before public launch
+## 7. Open engineering items before public launch
 
 1. Authentication, user accounts, database, backups.
 2. Rate limiting, logging/monitoring, HTTPS reverse proxy.

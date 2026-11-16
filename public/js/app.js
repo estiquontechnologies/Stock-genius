@@ -12,6 +12,7 @@ import * as alerts from './views/alerts.js';
 import * as desk from './views/desk.js';
 import * as methodology from './views/methodology.js';
 import * as source from './views/source.js';
+import * as options from './views/options.js';
 
 export const state = { meta: null, glossary: null, level: 'beginner' };
 try { state.level = localStorage.getItem('sg-level') || 'beginner'; } catch { /* ignore */ }
@@ -20,6 +21,7 @@ const ROUTES = [
   [/^\/?$/, overview, 'overview'],
   [/^\/explore$/, explore, 'explore'],
   [/^\/stock\/([^/]+)$/, stock, 'explore'],
+  [/^\/options(?:\/([^/]+))?$/, options, 'options'],
   [/^\/calendar$/, calendar, 'calendar'],
   [/^\/radar$/, radar, 'radar'],
   [/^\/breadth$/, breadth, 'breadth'],

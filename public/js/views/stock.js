@@ -83,6 +83,7 @@ export async function render(el, [ticker], query, alive) {
       ${sourceLine({ name: chart.source })}
     </section>
 
+    <div id="opt-card"></div>
     <div class="tabs" role="tablist" aria-label="Research sections">${TABS.map(([k, l]) => html`<button role="tab" id="tab-${k}" aria-controls="panel" aria-selected="${k === tab}" data-tab="${k}">${l}</button>`)}</div>
     <section id="panel" role="tabpanel" aria-labelledby="tab-${tab}"></section>
     <div style="margin-top:24px">${adSlot('banner')}</div>
@@ -92,6 +93,21 @@ export async function render(el, [ticker], query, alive) {
     levels: d.levels,
     markers: d.moves.map((m) => ({ date: m.date, dir: m.ret, label: `${m.direction === 'rose' ? 'Rose' : 'Fell'} ${fmt.pctAbs(Math.abs(m.ret))} — ${m.driver}` })),
   }));
+
+  api(`/api/options/${encodeURIComponent(inst.ticker)}`).then((o) => {
+    if (!alive()) return;
+    const a = o.selected;
+    const em = a.expectedMove.straddlePct;
+    el.querySelector('#opt-card').innerHTML = String(html`<section class="card" style="margin-top:16px">
+      <div class="card-head"><div><h2>Options market ${explain('option')}</h2><p>What end-of-day option prices imply for ${fmt.date(a.expiry)} (${a.daysToExpiry} days). Context only — not part of the view.</p></div>${o.simulated ? kindBadge('sample') : freshnessBadge('eod')}</div>
+      <div class="grid cols-4">
+        ${stat('Implied volatility', a.atmIv ? `${(a.atmIv * 100).toFixed(1)}%` : '—', o.realisedVol ? `realised ${(o.realisedVol * 100).toFixed(1)}%` : '')}
+        ${stat('Expected move', em ? `±${(em * 100).toFixed(1)}%` : '—', 'by expiry')}
+        ${stat('Put-call ratio', a.pcrOi?.toFixed(2) ?? '—', 'open interest')}
+        ${stat('OI levels', `${a.putWall[0]?.strike ?? '—'} / ${a.callWall[0]?.strike ?? '—'}`, 'largest put / call OI')}
+      </div>
+      <div class="row between" style="margin-top:10px"><span class="small muted">${o.risk.headline} Options can expire worthless.</span><a class="btn sm" href="#/options/${encodeURIComponent(inst.ticker)}">Open option chain →</a></div></section>`);
+  }).catch(() => { /* no listed options for this stock */ });
 
   const panel = el.querySelector('#panel');
   const showTab = (k) => {

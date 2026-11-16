@@ -30,7 +30,7 @@ test('meta reports sample mode and ads off by default', async () => {
 });
 
 test('core research endpoints respond', async () => {
-  for (const p of ['/api/overview', '/api/stocks', '/api/stocks/AURLEDGR', '/api/stocks/AURLEDGR/chart', '/api/radar', '/api/breadth', '/api/calendar', '/api/compare?tickers=AURLEDGR,QLSTNINF', '/api/glossary', '/api/methodology']) {
+  for (const p of ['/api/overview', '/api/stocks', '/api/stocks/AURLEDGR', '/api/stocks/AURLEDGR/chart', '/api/radar', '/api/breadth', '/api/calendar', '/api/compare?tickers=AURLEDGR,QLSTNINF', '/api/glossary', '/api/methodology', '/api/options', '/api/options/DEMOIDX', '/api/options/TRVLNMOT']) {
     const r = await get(p);
     assert.equal(r.status, 200, p);
   }

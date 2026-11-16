@@ -8,7 +8,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { SOURCES, bhavcopyText, parseUdiffBhavcopy, parseIndexClose, parseConstituents } from './sources.js';
+import { SOURCES, bhavcopyText, parseUdiffBhavcopy, parseIndexClose, parseConstituents, parseUdiffFo } from './sources.js';
+import { analyseExpiry } from '../analysis/options.js';
 import { lastCompletedSession, previousWeekday, nowInIst, isoDate } from '../lib/dates.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -120,6 +121,64 @@ export class Collector {
     return 'stored';
   }
 
+  // ------------------------------------------------------------ options
+  foSummary() {
+    return this.readJson('fo-summary.json', { days: [], bySymbol: {} });
+  }
+
+  /**
+   * Download the NSE F&O bhavcopy for recent sessions. Keeps full chains for
+   * the latest FO_KEEP_FULL sessions (nearest 3 expiries, strikes within
+   * ±25% of spot) and a compact daily summary (spot, ATM IV, PCR) for history.
+   */
+  async collectOptions() {
+    const foDir = path.join(this.dir, 'fo');
+    fs.mkdirSync(foDir, { recursive: true });
+    const summary = this.foSummary();
+    const keepFull = Number(process.env.FO_KEEP_FULL || 5);
+    const backfill = Number(process.env.FO_BACKFILL_SESSIONS || 20);
+    const done = new Set(summary.days);
+    let d = lastCompletedSession();
+    for (let k = 0; k < backfill; k++, d = previousWeekday(d)) {
+      if (done.has(d) || this.holidays.has(d)) continue;
+      try {
+        const r = await this.get(SOURCES.nseFoBhavcopy.url(d));
+        await sleep(this.delayMs);
+        if (!r?.buf) continue;
+        const parsed = parseUdiffFo(bhavcopyText(r.buf));
+        const date = parsed.date || d;
+        const bySym = new Map();
+        for (const row of parsed.rows) {
+          if (!bySym.has(row.symbol)) bySym.set(row.symbol, []);
+          bySym.get(row.symbol).push(row);
+        }
+        const full = {};
+        for (const [sym, rows] of bySym) {
+          const spot = rows.find((x) => x.spot)?.spot;
+          if (!spot) continue;
+          const expiries = [...new Set(rows.map((x) => x.expiry))].filter((e) => e >= date).sort().slice(0, 3);
+          const keep = rows.filter((x) => expiries.includes(x.expiry) && Math.abs(x.strike / spot - 1) <= 0.25);
+          full[sym] = { kind: rows[0].kind, spot, lotSize: rows.find((x) => x.lotSize)?.lotSize || null, expiries, rows: keep.map(({ symbol, kind, spot: _s, lotSize, ...x }) => x) };
+          const near = expiries.find((e) => e > date) || expiries[0];
+          const a = analyseExpiry({ spot, asOfDate: date, expiry: near, rows: keep.filter((x) => x.expiry === near) });
+          (summary.bySymbol[sym] ||= []).push({ date, spot, atmIv: a.atmIv ? +a.atmIv.toFixed(4) : null, pcr: a.pcrOi ? +a.pcrOi.toFixed(3) : null });
+        }
+        fs.writeFileSync(path.join(foDir, `${date}.json`), JSON.stringify({ date, source: SOURCES.nseFoBhavcopy.url(d), underlyings: full }));
+        summary.days.push(d);
+      } catch (e) {
+        this.note(`F&O ${d}: ${e.message}`);
+      }
+    }
+    for (const arr of Object.values(summary.bySymbol)) {
+      arr.sort((a, b) => (a.date < b.date ? -1 : 1));
+      if (arr.length > 260) arr.splice(0, arr.length - 260);
+    }
+    summary.days = [...new Set(summary.days)].sort().slice(-400);
+    this.writeJson('fo-summary.json', summary);
+    const files = fs.readdirSync(foDir).filter((f) => f.endsWith('.json')).sort();
+    for (const f of files.slice(0, Math.max(0, files.length - keepFull))) fs.unlinkSync(path.join(foDir, f));
+  }
+
   note(msg) {
     this.log.warn?.(`[collector] ${msg}`);
     this.status.errors = [{ at: new Date().toISOString(), msg }, ...this.status.errors].slice(0, 50);
@@ -140,20 +199,22 @@ export class Collector {
         if (!this.universe()) throw new Error('Cannot continue without a universe list');
       }
       // Primary source: Upstox candles. Fall back to exchange files if it fails.
+      this.status.priceSource = null;
       if (this.upstox) {
         const ratio = await this.upstox.run(this.universe().list);
         this.status.upstox = this.upstox.stats;
         if (ratio >= 0.8) {
           this.status.priceSource = 'upstox';
           this.log.info?.(`[collector] Upstox update ok (${this.upstox.stats.ok} instruments)`);
-          return;
+        } else {
+          this.note(`Upstox success ${(ratio * 100).toFixed(0)}% (${this.upstox.stats.lastError || 'unknown error'}); falling back to exchange files`);
         }
-        this.note(`Upstox success ${(ratio * 100).toFixed(0)}% (${this.upstox.stats.lastError || 'unknown error'}); falling back to exchange files`);
       }
-      this.status.priceSource = 'exchange-files';
+      const useFiles = this.status.priceSource !== 'upstox' || !this.upstox;
+      if (useFiles) this.status.priceSource = 'exchange-files';
       let d = lastCompletedSession();
       let stored = 0;
-      for (let k = 0; k < this.backfillSessions; k++, d = previousWeekday(d)) {
+      for (let k = 0; useFiles && k < this.backfillSessions; k++, d = previousWeekday(d)) {
         if (this.hasDay(d) || this.holidays.has(d)) continue;
         try {
           const r = await this.collectDay(d, isins);
@@ -165,7 +226,9 @@ export class Collector {
         }
         if (stored && stored % 20 === 0) this.saveStatus();
       }
-      this.log.info?.(`[collector] run complete, ${stored} new session(s)`);
+      if (useFiles) this.log.info?.(`[collector] exchange files: ${stored} new session(s)`);
+      if (process.env.COLLECT_OPTIONS !== 'false') await this.collectOptions();
+      this.log.info?.('[collector] run complete');
     } catch (e) {
       this.note(e.message);
     } finally {

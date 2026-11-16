@@ -90,7 +90,7 @@ export class AutoEodProvider {
       sessionsStored: d.files.length, instrumentsSkipped: d.skipped.length, liveQuotes: !!this.upstox?.token,
       licenseNote: 'End-of-day prices from files published by NSE and BSE, downloaded automatically once per day. Exchange terms restrict automated access and redistribution; public display requires a data licence (planned for version 2).',
       collector: this.collector?.info(), macroErrors: this.fred.errors, newsErrors: this.rss.errors,
-      coverage: { prices: 'eod', fundamentals: 'not available (version 2)', estimates: 'not available (version 2)', calendar: 'not available from free sources (version 2)', macro: this.fred.enabled ? 'FRED + India VIX' : 'India VIX only (add a free FRED_API_KEY for more)', news: 'RSS headlines (tone not classified)' },
+      coverage: { options: 'NSE F&O bhavcopy, end-of-day', prices: 'eod', fundamentals: 'not available (version 2)', estimates: 'not available (version 2)', calendar: 'not available from free sources (version 2)', macro: this.fred.enabled ? 'FRED + India VIX' : 'India VIX only (add a free FRED_API_KEY for more)', news: 'RSS headlines (tone not classified)' },
     };
   }
 
@@ -134,6 +134,48 @@ export class AutoEodProvider {
       return this.live;
     })();
     return this._liveP;
+  }
+
+  // ------------------------------------------------------------ options
+  latestFo() {
+    const foDir = path.join(this.dir, 'fo');
+    const files = fs.existsSync(foDir) ? fs.readdirSync(foDir).filter((f) => f.endsWith('.json')).sort() : [];
+    if (!files.length) return null;
+    const f = files.at(-1);
+    if (this._fo?.file === f) return this._fo.data;
+    const data = JSON.parse(fs.readFileSync(path.join(foDir, f), 'utf8'));
+    this._fo = { file: f, data };
+    return data;
+  }
+
+  optionMeta(sym, u, fo) {
+    const inst = this.load().instruments.find((i) => i.ticker === sym);
+    const INDEX_NAMES = { NIFTY: 'Nifty 50', BANKNIFTY: 'Nifty Bank', FINNIFTY: 'Nifty Financial Services', MIDCPNIFTY: 'Nifty Midcap Select', NIFTYNXT50: 'Nifty Next 50' };
+    return {
+      symbol: sym, name: inst?.name || INDEX_NAMES[sym] || sym, kind: u.kind, ticker: inst ? sym : null, lotSize: u.lotSize, spot: u.spot,
+      asOf: fo.date, expiries: u.expiries, source: 'NSE F&O bhavcopy (end-of-day)', sourceUrl: fo.source, freshness: 'eod', simulated: false,
+    };
+  }
+
+  async getOptionUnderlyings() {
+    const fo = this.latestFo();
+    if (!fo) return [];
+    return Object.entries(fo.underlyings).map(([sym, u]) => this.optionMeta(sym, u, fo));
+  }
+
+  async getOptionChain(symbol) {
+    const fo = this.latestFo();
+    const u = fo?.underlyings[symbol];
+    if (!u) return null;
+    const summary = this.collector?.foSummary().bySymbol[symbol] || [];
+    const bars = this.load().bars[symbol];
+    let rv = null;
+    if (bars?.length > 21) {
+      const rs = bars.slice(-21).map((b, i, a) => (i ? Math.log(b.close / a[i - 1].close) : null)).filter((x) => x != null);
+      const m = rs.reduce((a, b) => a + b, 0) / rs.length;
+      rv = Math.sqrt(rs.reduce((a, b) => a + (b - m) ** 2, 0) / (rs.length - 1)) * Math.sqrt(252);
+    }
+    return { ...this.optionMeta(symbol, u, fo), rows: u.rows.map((r) => ({ ...r, lotSize: u.lotSize })), history: summary, realisedVol20: rv, nextEarnings: null };
   }
 
   async getFundamentals() { return null; }

@@ -6,6 +6,7 @@ import { analysePortfolio } from './analysis/portfolio.js';
 import { sma, rsi, pctChange, annualVol } from './analysis/indicators.js';
 import { evaluateAssumption, THESIS_METRICS } from './services/thesis.js';
 import { GLOSSARY } from './content/glossary.js';
+import { optionsOverview, optionsDetail } from './services/options.js';
 import { parseCsv } from './lib/csv.js';
 import { lastCompletedSession, previousWeekday, addDays, daysBetween } from './lib/dates.js';
 import { SECTORS, SECTOR_ALIASES, FACTORS } from './analysis/sectors.js';
@@ -424,6 +425,16 @@ export function createApi({ provider, store, collector, ads }) {
     const clean = cleanHoldings(holdings);
     store.setPortfolio(clean);
     return { ok: true, holdings: clean, skipped: holdings.length - clean.length };
+  });
+
+  // ---------------------------------------------------------- options
+  on('GET', '/api/options', async () => ({ ...(await optionsOverview(provider)), data: await dataMeta() }));
+  on('GET', '/api/options/:sym', async (q, p) => {
+    const sym = ticker(p.sym);
+    const exp = str(q.get('expiry'), 10);
+    const d = await optionsDetail(provider, sym, /^\d{4}-\d{2}-\d{2}$/.test(exp) ? exp : undefined);
+    if (!d) throw new HttpError(404, `No option chain available for ${sym}`);
+    return { ...d, data: await dataMeta() };
   });
 
   on('GET', '/api/recommendation-log', async (q) => store.recommendationLog(q.get('ticker') ? ticker(q.get('ticker')) : null).slice(-500));

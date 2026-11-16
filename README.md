@@ -11,6 +11,8 @@ A free, ad-supported research desk for stocks listed on India’s **NSE and BSE*
 | ![Markets](docs/screenshots/markets.png) | ![Stock view](docs/screenshots/stock-view.png) |
 | **Why did this move?** | **Market stress radar** |
 | ![Why did this move](docs/screenshots/why-did-this-move.png) | ![Stress radar](docs/screenshots/stress-radar.png) |
+| **Options research** | **Payoff simulator** |
+| ![Options](docs/screenshots/options-chain.png) | ![Payoff](docs/screenshots/options-payoff.png) |
 
 ## Features
 
@@ -19,6 +21,7 @@ A free, ad-supported research desk for stocks listed on India’s **NSE and BSE*
 | **Markets overview** | NSE/BSE indices, stress radar summary, breadth, distribution of model views (not a ranking), largest movers, sector returns, market news |
 | **Stock research page** | Price chart with 50/200-day averages, support/resistance and unusual-move markers; view per horizon with confidence and risk; evidence by category (Fact vs Analysis, source + timestamp, “what could change it”); news with reported facts, impact analysis and observed reaction; fundamentals and peers; risks, upcoming events and invalidation conditions; full reasoning breakdown |
 | **Why did this move?** | Detects unusual daily moves, classifies them as market-wide, sector-wide (vs peers) or company-specific, and lines them up with news, filings and results. Labelled as *possible* explanations |
+| **Options research** | For indices and F&O stocks: option chain with computed IV and Greeks, open interest by strike, put-call ratio, max pain, volatility smile, term structure, ATM IV history and percentile, expected move by expiry, and a payoff simulator with example strategies. Research and education only — prominent F&O risk warning, no trade suggestions, no order placement |
 | **Catalyst calendar** | Results, dividends, corporate actions and macro/policy events, with the stocks you follow that may be affected directly or via their sector |
 | **Signal-change alerts** | Follow a stock to see changes to its view, confidence band, risk level and key signals, each with before/after evidence |
 | **Market stress radar** | Volatility, rupee, crude, Indian and US yields, global equities, geopolitical tension and breadth versus their past year, mapped to exposed sectors |
@@ -58,7 +61,8 @@ Then run `npm start` and leave it running. The server:
 1. Downloads the **Nifty 500 constituents list** (symbols, ISINs, industries), weekly.
 2. Downloads ~15 months of **daily candles from the Upstox API** for each stock and for Nifty 50, Nifty 500, SENSEX and India VIX. If Upstox fails for most instruments, it **automatically falls back to the NSE/BSE daily bhavcopy files and the NSE index-close file**.
 3. Repeats every day at `COLLECT_TIME_IST` (default 19:15 IST), fetching only what is missing.
-4. Loads macro series from **FRED** and headlines from the **NSE announcements RSS** and any feeds you add.
+4. Downloads the **NSE F&O bhavcopy** (end-of-day option prices and open interest) for recent sessions, keeping full chains for the last 5 sessions and a daily ATM-IV / PCR history.
+5. Loads macro series from **FRED** and headlines from the **NSE announcements RSS** and any feeds you add.
 
 The first backfill takes roughly 10–60 minutes. The site shows a “collecting data” state until each stock has ~220 sessions of history. Data is stored under `data/market/`.
 
@@ -66,8 +70,8 @@ The first backfill takes roughly 10–60 minutes. The site shows a “collecting
 
 | Mode | Prices | Fundamentals / estimates / corporate calendar | News | Macro |
 |---|---|---|---|---|
-| `sample` | **Simulated**, fictional companies, labelled everywhere | Simulated | Simulated, links to an explanation page | Simulated |
-| `auto` | **Real, end-of-day** (Upstox candles or exchange files). “Live” only for last-traded prices if `UPSTOX_ACCESS_TOKEN` is set | **Not available from free sources** → shown as missing; confidence is reduced | Real RSS headlines, tone not classified | Real (FRED, India VIX) |
+| `sample` | **Simulated**, fictional companies, labelled everywhere (incl. option chains) | Simulated | Simulated, links to an explanation page | Simulated |
+| `auto` | **Real, end-of-day** (Upstox candles or exchange files; options from the NSE F&O bhavcopy). “Live” only for last-traded prices if `UPSTOX_ACCESS_TOKEN` is set | **Not available from free sources** → shown as missing; confidence is reduced | Real RSS headlines, tone not classified | Real (FRED, India VIX) |
 
 Every price shows a freshness badge (Sample / End-of-day / Live) and timestamp. A stale-data banner appears when sessions are missing. Test it with `SAMPLE_FORCE_STALE=true`.
 

@@ -28,6 +28,11 @@ export const SOURCES = {
     pattern: process.env.NSE_INDICES_URL || 'https://nsearchives.nseindia.com/content/indices/ind_close_all_{DDMMYYYY}.csv',
     url: (iso) => tpl(SOURCES.nseIndices.pattern, iso),
   },
+  nseFoBhavcopy: {
+    label: 'NSE F&O bhavcopy (UDiFF)',
+    pattern: process.env.NSE_FO_BHAVCOPY_URL || 'https://nsearchives.nseindia.com/content/fo/BhavCopy_NSE_FO_0_0_0_{YYYYMMDD}_F_0000.csv.zip',
+    url: (iso) => tpl(SOURCES.nseFoBhavcopy.pattern, iso),
+  },
   universe: {
     label: 'Nifty 500 constituents (with industry)',
     url: () => process.env.UNIVERSE_LIST_URL || 'https://nsearchives.nseindia.com/content/indices/ind_nifty500list.csv',
@@ -115,4 +120,29 @@ export function normaliseDate(s) {
   m = s.match(/^(\d{1,2})[- ]([A-Za-z]{3})[- ](\d{4})$/);
   if (m) return `${m[3]}-${MONTHS[m[2].toLowerCase()]}-${m[1].padStart(2, '0')}`;
   return null;
+}
+
+/**
+ * Parse a UDiFF F&O bhavcopy, keeping index and stock OPTIONS only.
+ * Returns { date, rows: [{ symbol, kind, expiry, strike, type, price, settle, oi, chgOi, volume, spot, lotSize }] }.
+ */
+export function parseUdiffFo(text) {
+  const { headers, records } = parseCsvObjects(text);
+  if (!headers.includes('OptnTp') || !headers.includes('StrkPric')) throw new Error('Unrecognised F&O bhavcopy format');
+  const rows = [];
+  let date = null;
+  for (const r of records) {
+    if (r.FinInstrmTp !== 'IDO' && r.FinInstrmTp !== 'STO') continue;
+    if (r.OptnTp !== 'CE' && r.OptnTp !== 'PE') continue;
+    date ||= r.TradDt;
+    const close = num(r.ClsPric);
+    const settle = num(r.SttlmPric);
+    const volume = num(r.TtlTradgVol) ?? 0;
+    rows.push({
+      symbol: r.TckrSymb, kind: r.FinInstrmTp === 'IDO' ? 'index' : 'stock', expiry: normaliseDate(r.XpryDt), strike: num(r.StrkPric), type: r.OptnTp,
+      price: volume > 0 && close > 0 ? close : settle, settle, oi: num(r.OpnIntrst) ?? 0, chgOi: num(r.ChngInOpnIntrst) ?? 0, volume,
+      spot: num(r.UndrlygPric), lotSize: num(r.NewBrdLotQty),
+    });
+  }
+  return { date: normaliseDate(date), rows };
 }
